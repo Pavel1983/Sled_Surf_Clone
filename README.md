@@ -45,7 +45,7 @@ Everything the game uses is under `Assets/_Game`.
 - `Art` holds the Ladybug model and clips, the obstacle and street prop meshes, the road texture and the HUD sprites. `Audio` holds the sound clips and the `RunSounds` asset that lists them.
 - `Prefabs` holds the road, the obstacles and the scenery. `Materials` and `Shaders` hold the snow road shader and the flat materials.
 
-`TechDesign.md` describes the architecture. `CodeRules.md` holds the code and architecture rules, and `.editorconfig` enforces the formatting part of them.
+`TechDesign.md` describes the architecture. `.editorconfig` holds the formatting rules of the code.
 
 ## Tools
 
@@ -92,7 +92,7 @@ Shortcuts for testing the shop, under **Tools → Game**. They work in Edit Mode
 
 ### Style check
 
-`.editorconfig` holds the formatting rules of `CodeRules.md` that a tool can check: braces on every branch, explicit access modifiers, and block bodies for methods. To check the code, open the project in Unity once so it writes `Assembly-CSharp.csproj`, then run this from the project folder:
+`.editorconfig` holds the formatting rules a tool can check: braces on every branch, explicit access modifiers, and block bodies for methods. To check the code, open the project in Unity once so it writes `Assembly-CSharp.csproj`, then run this from the project folder:
 
 ```
 dotnet format style Assembly-CSharp.csproj --verify-no-changes --no-restore --severity warn --diagnostics IDE0011 IDE0040 IDE0022

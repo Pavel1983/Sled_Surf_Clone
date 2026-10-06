@@ -4,8 +4,6 @@ A runner prototype in the style of Sled Surfers: a slingshot launch, a ride down
 
 Unity `6000.5.11f1`, URP, the Input System and the Splines package. One scene: `Assets/_Game/Scenes/SampleScene.unity`.
 
-The rules the code follows are in `CodeRules.md`.
-
 ---
 
 ## 1. Layers

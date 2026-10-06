@@ -1,4 +1,4 @@
-# Code style of the project. The rules are explained in CodeRules.md.
+# Code style of the project.
 root = true
 
 [*.cs]
