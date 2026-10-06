@@ -68,14 +68,19 @@ public class SlingshotLaunch : MonoBehaviour
     [SerializeField] private float sprayFullSpeed = 28f;
 
     [Header("Steer")]
-    [Tooltip("Tightest path the sled can follow on the road, in meters. Full stick holds this curve. A slow sled barely changes heading, because it cannot pivot in place.")]
-    [SerializeField] private float groundTurnRadius = 28f;
-    [Tooltip("Tightest path the sled can follow in the air, in meters. Larger than the ground radius, so a jump corrects less.")]
-    [SerializeField] private float airTurnRadius = 90f;
+    [Tooltip("Sideways acceleration at full stick on the road, in g. The turn rate is this divided by the speed, so the sled turns sharply when slow and gently when fast.")]
+    [SerializeField] private float groundLateralG = 1.2f;
+    [Tooltip("Sideways acceleration at full stick in the air, in g. Lower than on the road, so a jump corrects less.")]
+    [SerializeField] private float airLateralG = 0.4f;
+    [Tooltip("Fastest the heading may turn, in degrees per second. It caps the turn at low speed, where the acceleration limit alone would spin the sled.")]
+    [SerializeField] private float maxTurnRate = 120f;
     [Tooltip("Seconds the turn takes to catch up with the stick. Larger feels heavier: the turn builds up and fades out instead of snapping. 0 follows the stick at once.")]
     [SerializeField] private float steerSmoothTime = 0.25f;
     [Tooltip("Stick response curve. 1 is linear. Larger makes a small stick move gentler, while full stick still gives the full turn.")]
     [SerializeField] private float steerCurve = 1.6f;
+    [Tooltip("Full width, in degrees, of the cone the sled may travel in, centered on the road direction. 60 keeps the heading within 30 degrees to either side. 0 turns the limit off.")]
+    [Range(0f, 180f)]
+    [SerializeField] private float headingCone = 60f;
 
     private Rigidbody body;
 
@@ -297,6 +302,7 @@ public class SlingshotLaunch : MonoBehaviour
             if (!stopped)
             {
                 ApplySteer();
+                LimitHeading();
                 AlignBody();
                 velocityBeforeStep = body.linearVelocity;
             }
@@ -594,7 +600,6 @@ public class SlingshotLaunch : MonoBehaviour
             }
         }
 
-        float turnRadius = Mathf.Max(1f, grounded ? groundTurnRadius : airTurnRadius);
         Vector3 velocity = body.linearVelocity;
         Vector3 vertical = Vector3.Project(velocity, axis);
         Vector3 planar = velocity - vertical;
@@ -605,17 +610,65 @@ public class SlingshotLaunch : MonoBehaviour
             return;
         }
 
-        // Sideways push v² / R bends the path into a circle of `turnRadius` at full stick.
-        // The same radius is a small heading change when the sled is slow.
-        Vector3 side = Vector3.Cross(axis, planar / speed);
-        float accel = input * speed * speed / turnRadius;
-        Vector3 turned = planar + side * (accel * Time.fixedDeltaTime);
-        if (turned.sqrMagnitude < 0.0001f)
+        // The stick asks for a share of the sideways acceleration the sled can take. On a curve
+        // that acceleration is speed times turn rate, so the same stick turns less the faster it goes.
+        float lateralAcceleration = input * (grounded ? groundLateralG : airLateralG) * Physics.gravity.magnitude;
+        float turnRate = lateralAcceleration / speed * Mathf.Rad2Deg;
+        turnRate = Mathf.Clamp(turnRate, -maxTurnRate, maxTurnRate);
+        Vector3 turned = Quaternion.AngleAxis(turnRate * Time.fixedDeltaTime, axis) * planar;
+
+        body.linearVelocity = vertical + turned;
+
+        Vector3 facing = Vector3.ProjectOnPlane(body.linearVelocity, Vector3.up);
+        if (facing.sqrMagnitude > 0.01f)
+        {
+            stableFacing = facing.normalized;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the direction of travel inside the heading cone around the road direction.
+    /// The angle is measured in the plane of the road, so a slope does not count against it.
+    /// </summary>
+    private void LimitHeading()
+    {
+        if (headingCone <= 0f || body.isKinematic)
         {
             return;
         }
 
-        body.linearVelocity = vertical + turned.normalized * speed;
+        if (!road.TryGetSurfaceCoord(body.position, roadHintT, out float t, out float u, out _))
+        {
+            return;
+        }
+
+        roadHintT = t;
+        if (!road.TryGetSurface(t, u, out _, out Vector3 tangent, out Vector3 roadUp))
+        {
+            return;
+        }
+
+        Vector3 velocity = body.linearVelocity;
+        Vector3 vertical = Vector3.Project(velocity, roadUp);
+        Vector3 planar = velocity - vertical;
+        Vector3 forward = Vector3.ProjectOnPlane(tangent, roadUp);
+        float speed = planar.magnitude;
+        // A sled that is nearly stopped or sliding back has no heading to hold.
+        // Turning it around here would also hide the backward slide that ends the run.
+        if (speed < 2f || forward.sqrMagnitude < 0.0001f || Vector3.Dot(planar, forward) <= 0f)
+        {
+            return;
+        }
+
+        float halfCone = headingCone * 0.5f;
+        float angle = Vector3.SignedAngle(forward, planar, roadUp);
+        if (Mathf.Abs(angle) <= halfCone)
+        {
+            return;
+        }
+
+        Vector3 limited = Quaternion.AngleAxis(Mathf.Sign(angle) * halfCone, roadUp) * forward.normalized;
+        body.linearVelocity = vertical + limited * speed;
 
         Vector3 facing = Vector3.ProjectOnPlane(body.linearVelocity, Vector3.up);
         if (facing.sqrMagnitude > 0.01f)

@@ -18,6 +18,9 @@ public class RunEconomy
     private const int PerKilometerStep = 5;
     private const int PipsPerRow = 5;
 
+    /// <summary>How many looks an upgrade goes through. The shop has one picture for each.</summary>
+    public const int TierCount = 5;
+
     /// <summary>
     /// Raised after coins or levels change, so the progress can be saved.
     /// </summary>
@@ -48,6 +51,25 @@ public class RunEconomy
     public void BeginRun()
     {
         runOpen = true;
+    }
+
+    /// <summary>Adds coins outside a run. Used by the editor cheat.</summary>
+    public void AddCoins(int amount)
+    {
+        progress.Coins = Mathf.Max(0, progress.Coins + amount);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Takes the player back to no coins and no upgrades.</summary>
+    public void ClearProgress()
+    {
+        progress.Coins = 0;
+        progress.LaunchLevel = 0;
+        progress.FrictionLevel = 0;
+        progress.IncomeLevel = 0;
+        progress.RunsCompleted = 0;
+        LastRunValue = 0;
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -114,14 +136,38 @@ public class RunEconomy
         return filled;
     }
 
+    /// <summary>
+    /// Which row of pips the upgrade is on, counted from 0. The shop shows a better-looking item for each row.
+    /// A full row still belongs to its own tier: the picture changes with the first pip of the next row.
+    /// </summary>
+    public int Tier(UpgradeId id)
+    {
+        int level = Level(id);
+        if (level <= 0)
+        {
+            return 0;
+        }
+
+        return (level - 1) / PipsPerRow;
+    }
+
     public int NextCost(UpgradeId id)
     {
         return 6 + 5 * Level(id);
     }
 
+    /// <summary>
+    /// True when the upgrade is on its last picture and that picture's row of pips is full.
+    /// A save from before the cap may hold a higher level. It can still fill its current row, then it stops.
+    /// </summary>
+    public bool IsMaxed(UpgradeId id)
+    {
+        return Tier(id) >= TierCount - 1 && PipCount(id) == PipsPerRow;
+    }
+
     public bool CanBuy(UpgradeId id)
     {
-        return !runOpen && progress.Coins >= NextCost(id);
+        return !runOpen && !IsMaxed(id) && progress.Coins >= NextCost(id);
     }
 
     public bool TryBuy(UpgradeId id)

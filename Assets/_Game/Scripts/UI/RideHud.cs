@@ -22,6 +22,11 @@ public class RideHud : MonoBehaviour
         public Image[] pips;
         public Button button;
         public Image plate;
+        public Image icon;
+        [Tooltip("The coin next to the price. Hidden once the upgrade is maxed and there is no price.")]
+        public GameObject costIcon;
+        [Tooltip("One picture per tier, from the first to the best. Past the last one the best stays.")]
+        public Sprite[] tiers;
     }
 
     private const float BarWidth = 22f;
@@ -258,7 +263,18 @@ public class RideHud : MonoBehaviour
             SetText(row.rate, economy.IncomePerKilometer.ToString(CultureInfo.InvariantCulture) + "/km");
         }
 
-        SetText(row.cost, FormatMoney(economy.NextCost(row.id)));
+        bool maxed = economy.IsMaxed(row.id);
+        SetText(row.cost, maxed ? "MAX" : FormatMoney(economy.NextCost(row.id)));
+        if (row.costIcon.activeSelf == maxed)
+        {
+            row.costIcon.SetActive(!maxed);
+        }
+
+        Sprite picture = row.tiers[Mathf.Min(economy.Tier(row.id), row.tiers.Length - 1)];
+        if (row.icon.sprite != picture)
+        {
+            row.icon.sprite = picture;
+        }
 
         // The button and the pips take the upgrade's color, dimmed when it cannot be bought.
         Color theme = Theme(row.id);

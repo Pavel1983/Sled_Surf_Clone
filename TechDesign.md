@@ -39,7 +39,7 @@ Core and Data know nothing about `MonoBehaviour`, Canvas or the scene. The UI do
 1. Creates `ProgressRepository`, loads `PlayerProgress`, creates `RunEconomy`.
 2. Hands the economy to the objects that read it: `SlingshotLaunch.Initialize`, `RideHud.Initialize`.
 3. Subscribes the events (the table in §4).
-4. Collects every `Obstacle` under the `Obstacles` object and subscribes it to the restart.
+4. Collects every `Obstacle` under its obstacle roots (`Obstacles` and `Decor`) and subscribes it to the restart.
 
 How dependencies are wired:
 
@@ -61,6 +61,7 @@ How dependencies are wired:
 | `Main Camera` | `BallFollowCamera` | The camera behind the sled. |
 | `Path Coins` | `PathCoins` | Coins along the road. |
 | `Obstacles` | child `CrashObstacle` / `SlowObstacle` objects | The obstacles of the level. |
+| `Decor` | `DecorVisibility`, child `CrashObstacle` / `SlowObstacle` prefab instances | Street props along both sides of the run. Each one is an obstacle with a box collider. `DecorVisibility` switches on only the ones within range of the sled. |
 | `HUD` | `Canvas`, `RideHud` | The whole interface. |
 | `Steer Stick` | `Canvas`, `SteerStick` | The floating stick. |
 | `Run Audio` | `AudioSource`, `RunAudio` | Every sound of a run. |
@@ -151,7 +152,7 @@ The largest class of the project. It builds the road from a spline and answers q
 
 **Alignment (`AlignBody`).** The solver never rotates the body. Every physics step the code turns its nose along the velocity and lays it on the slope: the normal comes from a ray against the road collider and is smoothed. In the air the tilt is kept.
 
-**Steering (`ApplySteer`).** The stick sets a target from −1 to 1. It goes through a response curve and smoothing, then the velocity is turned so that at full stick the sled follows an arc of a set radius (`v² / R`). The speed itself does not change. The radius is larger in the air.
+**Steering (`ApplySteer`).** The stick sets a target from −1 to 1. It goes through a response curve and smoothing, and the result is a share of the sideways acceleration the sled can take (`groundLateralG`, in g). On a curve that acceleration is speed times turn rate, so the turn rate is `a / v`: sharp at low speed, gentle at high speed. `maxTurnRate` caps it where the sled is slow. The velocity is rotated by that rate and its magnitude does not change. The acceleration limit is lower in the air.
 
 **Friction setting.** `Improved Patch Friction` is on in `Project Settings → Physics`. Without it a capsule with several contact points is slowed more than it should be.
 

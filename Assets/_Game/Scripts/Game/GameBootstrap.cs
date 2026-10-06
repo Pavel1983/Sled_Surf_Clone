@@ -12,11 +12,14 @@ public class GameBootstrap : MonoBehaviour
     [SerializeField] private PathCoins pathCoins;
     [SerializeField] private RideHud hud;
     [SerializeField] private RunAudio runAudio;
-    [Tooltip("Parent of every obstacle of the level. Obstacles under it come back when a run restarts.")]
-    [SerializeField] private Transform obstaclesRoot;
+    [Tooltip("Parents of everything the sled can hit. Obstacles under them come back when a run restarts.")]
+    [SerializeField] private Transform[] obstacleRoots;
 
     private ProgressRepository repository;
     private RunEconomy economy;
+
+    /// <summary>The live economy of the running game. The editor cheats reach it through here.</summary>
+    public RunEconomy Economy => economy;
 
     private void Awake()
     {
@@ -37,10 +40,13 @@ public class GameBootstrap : MonoBehaviour
         pathCoins.Picked += runAudio.PlayCoin;
         hud.Clicked += runAudio.PlayClick;
 
-        Obstacle[] obstacles = obstaclesRoot.GetComponentsInChildren<Obstacle>(true);
-        for (int i = 0; i < obstacles.Length; i++)
+        for (int i = 0; i < obstacleRoots.Length; i++)
         {
-            launch.RunReset += obstacles[i].Restore;
+            Obstacle[] obstacles = obstacleRoots[i].GetComponentsInChildren<Obstacle>(true);
+            for (int j = 0; j < obstacles.Length; j++)
+            {
+                launch.RunReset += obstacles[j].Restore;
+            }
         }
     }
 

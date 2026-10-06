@@ -24,8 +24,8 @@ The sled is the object named `Slider`. The road is the `Level1_Road` prefab.
 - Steering with a floating stick.
 - Coins along the path. Driving through one collects it.
 - Sounds from the Ladybug pack: obstacle impacts, her voice on a hit, the sit-down, a sharp turn on the snow, a landing, a coin pickup and button taps.
-- Two obstacles from Frozen Paris, placed by hand in the scene. An iceberg ends the run. A frozen bench keeps about a third of the current speed. Prefabs are in `Assets/_Game/Prefabs/Obstacles/Crash` and `.../Slow`.
-- Icebergs off the driving line, and a pair that marks the finish.
+- Three obstacles, placed by hand in the scene. An iceberg and an electric gate end the run. A frozen bench keeps about a third of the current speed. Prefabs are in `Assets/_Game/Prefabs/Obstacles/Crash` and `.../Slow`.
+- Street props from the Ladybug pack along both sides of the run, and each one is an obstacle. Buses, news vans and hedges end the run. Flower beds, flower carts, barriers and pizza signs break and keep about a third of the speed. Only the props near the sled are switched on.
 - The run also ends if the sled stops, if it starts sliding backward, or when it reaches the finish.
 - The finish is **70% of the spline**, not a shorter mesh. `finishFraction` on `Slider` changes that. Set it to `1` to require the whole road.
 - After the run, a results card shows distance and coins earned. Upgrades bought before the next launch are saved with `PlayerPrefs`: slingshot power, lower sled friction, and coins paid per kilometre.
