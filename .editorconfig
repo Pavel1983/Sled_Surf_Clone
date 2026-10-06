@@ -1,0 +1,24 @@
+# Code style of the project. The rules are explained in CodeRules.md.
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+
+# Braces on every if / for / foreach / while.
+csharp_prefer_braces = true:warning
+dotnet_diagnostic.IDE0011.severity = warning
+
+# Access modifiers are always written out.
+dotnet_style_require_accessibility_modifiers = always:warning
+dotnet_diagnostic.IDE0040.severity = warning
+
+# Methods have a block body. Expression-bodied properties are fine.
+csharp_style_expression_bodied_methods = false:warning
+csharp_style_expression_bodied_constructors = false:warning
+csharp_style_expression_bodied_local_functions = false:warning
+csharp_style_expression_bodied_properties = true:silent
+dotnet_diagnostic.IDE0022.severity = warning
+dotnet_diagnostic.IDE0021.severity = warning
+dotnet_diagnostic.IDE0061.severity = warning
