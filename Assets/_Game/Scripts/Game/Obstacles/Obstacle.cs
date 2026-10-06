@@ -26,7 +26,7 @@ public abstract class Obstacle : MonoBehaviour
     }
 
     /// <summary>The sled touched this obstacle. Called by the sled from OnCollisionEnter.</summary>
-    public void Hit(SlingshotLaunch sled)
+    public void Hit(Sled sled)
     {
         if (used)
         {
@@ -53,7 +53,7 @@ public abstract class Obstacle : MonoBehaviour
     }
 
     /// <summary>What the obstacle does to the sled. Called once per run.</summary>
-    protected abstract void Apply(SlingshotLaunch sled);
+    protected abstract void Apply(Sled sled);
 
     private void SetSolid(bool solid)
     {

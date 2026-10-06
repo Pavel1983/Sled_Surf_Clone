@@ -62,7 +62,7 @@ public class SledRider : MonoBehaviour
 
     // Yaw that faces the camera, kept from the last frame she was fully standing.
     private float standYaw;
-    private SlingshotLaunch launch;
+    private Sled sled;
     private bool hasCrashClip;
     private bool crashed;
     private float crashWeight;
@@ -86,7 +86,7 @@ public class SledRider : MonoBehaviour
         heightFitted = FitHeight();
         PlaySlide();
 
-        launch = GetComponent<SlingshotLaunch>();
+        sled = GetComponent<Sled>();
     }
 
     private void LateUpdate()
@@ -162,12 +162,12 @@ public class SledRider : MonoBehaviour
 
     private void UpdateSeat()
     {
-        if (!hasIdleClip || launch == null)
+        if (!hasIdleClip || sled == null)
         {
             return;
         }
 
-        bool wantSeated = launch.PlayArmed || launch.IsRiding || launch.IsStopped;
+        bool wantSeated = sled.PlayArmed || sled.IsRiding || sled.IsStopped;
         if (wantSeated && seat < 1f)
         {
             float duration = hasSitClip ? sitLength : sitBlendTime;

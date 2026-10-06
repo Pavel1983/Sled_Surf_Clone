@@ -8,7 +8,7 @@ using UnityEngine;
 public class SlideFacing : MonoBehaviour
 {
     [SerializeField] private Rigidbody body;
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
     [SerializeField] private SplineRoad road;
     [SerializeField] private CapsuleCollider capsule;
     [SerializeField] private float minSpeed = 0.75f;
@@ -82,12 +82,12 @@ public class SlideFacing : MonoBehaviour
     /// </summary>
     private void FaceRoadBeforeLaunch()
     {
-        if (launch.IsRiding)
+        if (sled.IsRiding)
         {
             return;
         }
 
-        Vector3 heading = Vector3.ProjectOnPlane(launch.StableFacing, Vector3.up);
+        Vector3 heading = Vector3.ProjectOnPlane(sled.StableFacing, Vector3.up);
         if (heading.sqrMagnitude > 0.0001f)
         {
             travel = heading.normalized;

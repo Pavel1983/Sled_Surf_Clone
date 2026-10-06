@@ -1892,7 +1892,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0740af3523ec74c5fb7c68f4f53f3dde, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RideHud
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
+  slingshot: {fileID: 813100010}
   pathCoins: {fileID: 2036134679}
   speedGaugeMaxKmh: 180
   speedSharpness: 9
@@ -7460,6 +7461,9 @@ GameObject:
   - component: {fileID: 813100005}
   - component: {fileID: 813100006}
   - component: {fileID: 813100007}
+  - component: {fileID: 813100010}
+  - component: {fileID: 813100009}
+  - component: {fileID: 813100008}
   m_Layer: 0
   m_Name: Slider
   m_TagString: Untagged
@@ -7526,27 +7530,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlingshotLaunch
   road: {fileID: 813100030}
-  impulsePerMeter: 5
-  fullPullMeters: 3.6
   visual: {fileID: 813100012}
-  aimCamera: {fileID: 330585545}
-  pullLine: {fileID: 1105327418}
-  shotLine: {fileID: 1190151217}
-  snowSpray: {fileID: 1059845047}
   reverseSpeed: 0.3
   restRadius: 0.45
   restDelay: 0.7
   finishFraction: 0.7
   crashResultsDelay: 2
-  spraySizeSlow: 0.5
-  spraySizeFast: 2.5
-  sprayFullSpeed: 28
-  groundLateralG: 1.2
-  airLateralG: 0.4
-  maxTurnRate: 120
-  steerSmoothTime: 0.1
-  steerCurve: 1.6
-  headingCone: 60
 --- !u!136 &813100006
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -7594,6 +7583,58 @@ MonoBehaviour:
   crashBlendTime: 0.15
   sitBlendTime: 0.15
   turnShare: 0.7
+--- !u!114 &813100008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 813100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 184783ee9f6d245598e754c114185e8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SnowTrail
+  snowSpray: {fileID: 1059845047}
+  spraySizeSlow: 0.5
+  spraySizeFast: 2.5
+  sprayFullSpeed: 28
+--- !u!114 &813100009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 813100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf16a64a8107d41a8b02a585fca1c5f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SledSteering
+  groundLateralG: 1.2
+  airLateralG: 0.4
+  maxTurnRate: 120
+  steerSmoothTime: 0.1
+  steerCurve: 1.6
+  headingCone: 60
+--- !u!114 &813100010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 813100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f038e82cf7624427bcc87016b24ad4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SlingshotPull
+  road: {fileID: 813100030}
+  aimCamera: {fileID: 330585545}
+  pullLine: {fileID: 1105327418}
+  shotLine: {fileID: 1190151217}
+  impulsePerMeter: 5
+  fullPullMeters: 3.6
 --- !u!1 &813100011
 GameObject:
   m_ObjectHideFlags: 0
@@ -7639,7 +7680,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SlideFacing
   body: {fileID: 813100003}
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
   road: {fileID: 813100030}
   capsule: {fileID: 813100006}
   minSpeed: 0.75
@@ -7659,7 +7700,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3a91e7d4b2f4a6e8d0c1b2a39485761, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallFollowCamera
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
   distance: 8
   height: 3.5
   lookHeight: 0.6
@@ -18654,7 +18695,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 864287bb18d2046a5abb37d414068e97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DecorVisibility
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
   visibleRange: 350
 --- !u!1001 &1493810835
 PrefabInstance:
@@ -19398,7 +19439,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3af0d6243e61e4b04b01a39ac83c2934, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameBootstrap
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
   rider: {fileID: 813100007}
   pathCoins: {fileID: 2036134679}
   hud: {fileID: 191527495}
@@ -19575,7 +19616,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 17e0cb2868f324d73b16cb769f4c9eb9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RunAudio
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
+  steering: {fileID: 813100009}
   sounds: {fileID: 11400000, guid: 0dc8ce0715ae34231826c81b4b5182e7, type: 2}
 --- !u!82 &1677014132
 AudioSource:
@@ -21755,7 +21797,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b584e8bbe710b4efaa63138b3132ed00, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SteerStick
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
+  steering: {fileID: 813100009}
   ringRadius: 180
   knobRadius: 64
   referenceHeight: 1920
@@ -23220,7 +23263,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PathCoins
   road: {fileID: 813100030}
-  launch: {fileID: 813100005}
+  sled: {fileID: 813100005}
   minSpacingMeters: 100
   maxSpacingMeters: 200
   firstCoinMeters: 22

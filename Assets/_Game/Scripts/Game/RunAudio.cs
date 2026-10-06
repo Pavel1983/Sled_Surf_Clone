@@ -20,7 +20,8 @@ public class RunAudio : MonoBehaviour
     // A hop shorter than this, in seconds, is a bump and not a jump.
     private const float JumpSeconds = 0.3f;
 
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
+    [SerializeField] private SledSteering steering;
     [SerializeField] private RunSounds sounds;
 
     private AudioSource source;
@@ -36,7 +37,7 @@ public class RunAudio : MonoBehaviour
 
     private void Update()
     {
-        if (!launch.CanSteer)
+        if (!sled.CanSteer)
         {
             steerSide = 0;
             airTime = 0f;
@@ -80,7 +81,7 @@ public class RunAudio : MonoBehaviour
 
     private void WatchLanding()
     {
-        if (!launch.IsGrounded)
+        if (!sled.IsGrounded)
         {
             airTime += Time.deltaTime;
             return;
@@ -96,7 +97,7 @@ public class RunAudio : MonoBehaviour
 
     private void WatchSwing()
     {
-        float input = launch.SteerInput;
+        float input = steering.Input;
         int side = input > SideThreshold ? 1 : input < -SideThreshold ? -1 : 0;
         if (side == 0)
         {
@@ -106,7 +107,7 @@ public class RunAudio : MonoBehaviour
         // The time is refreshed while the stick stays on a side, so the window measures
         // how long the stick took to get across the middle.
         bool swung = steerSide != 0 && side != steerSide && Time.time - steerSideTime <= SwingSeconds;
-        bool carving = launch.IsGrounded && launch.SurfaceSpeed >= SwingMinSpeed;
+        bool carving = sled.IsGrounded && sled.SurfaceSpeed >= SwingMinSpeed;
         if (swung && carving && Time.time >= nextSwingTime)
         {
             Play(sounds.SharpTurn);

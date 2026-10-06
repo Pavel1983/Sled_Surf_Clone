@@ -51,17 +51,9 @@ public class SplineRoad : MonoBehaviour
     private const int MaxVisualSegments = 1600;
     private const int MaxVisualColumns = 72;
 
-    // Short pieces so the camera draws the nearby road, not the whole ribbon.
-    private const int VisualChunkSegments = 32;
-
-    // The road is hundreds of meters wide. One mesh that wide stays in the frustum
-    // even when only the center is on screen, so each length piece is split into bands.
-    private const int VisualBandCount = 4;
-
     // A sculpted lip can rise more than a hundred meters between two samples.
     // One triangle that long is a few pixels wide and a hundred tall, and the GPU
     // shades its whole bounding box. Split those edges.
-    private const float MaxVisualEdgeMeters = 8f;
     private const int MinSnowRows = 128;
     private const int MaxSnowRows = 8192;
 
@@ -105,18 +97,9 @@ public class SplineRoad : MonoBehaviour
     private int snowColumns = LegacySnowColumns;
     private SplineContainer splineContainer;
     private Mesh roadMesh;
-    private readonly List<Mesh> visualChunkMeshes = new List<Mesh>();
-    private readonly List<MeshRenderer> visualChunkRenderers = new List<MeshRenderer>();
-    private Transform visualChunkRoot;
-    private Material runtimeRoadMaterial;
-    private Material runtimeRoadSource;
-    private Mesh leftWallMesh;
-    private Mesh rightWallMesh;
-    private Transform leftWall;
-    private Transform rightWall;
+    private RoadVisualChunks chunks;
+    private RoadWalls walls;
     private PhysicsMaterial roadPhysics;
-    private PhysicsMaterial wallPhysics;
-    private Material runtimeWallMaterial;
 
     // Fractional coverage left after rounding. Sparse so a 4 km mask does not allocate tens of megabytes.
     private Dictionary<int, float> snowRemainder;
@@ -133,11 +116,14 @@ public class SplineRoad : MonoBehaviour
 
     // World length of a 4 km spline is an integration. Callers used to redo it on every stamp.
     private float cachedWorldLength = -1f;
-    private readonly List<Material> chunkDebugMaterials = new List<Material>();
-    private bool debugChunksVisible;
     private bool debugShowChunksCached;
 
     public float CurrentFriction { get; private set; }
+
+    // Created on first use: OnValidate can ask for a rebuild before OnEnable has run.
+    private RoadVisualChunks Chunks => chunks ??= new RoadVisualChunks(transform);
+
+    private RoadWalls Walls => walls ??= new RoadWalls(transform);
 
     /// <summary>The collider of the road surface. The side walls are separate colliders.</summary>
     public MeshCollider SurfaceCollider { get; private set; }
@@ -171,9 +157,7 @@ public class SplineRoad : MonoBehaviour
         UnityEditor.Undo.undoRedoPerformed -= OnSnowUndo;
 #endif
         ReleaseSnowTexture();
-        ReleaseChunkDebugMaterials();
-        ReleaseVisualChunks();
-        ReleaseRuntimeRoadMaterial();
+        Chunks.Release();
     }
 
     private void LateUpdate()
@@ -183,9 +167,9 @@ public class SplineRoad : MonoBehaviour
             FlushSnowTexture();
         }
 
-        if (debugShowChunks != debugChunksVisible)
+        if (debugShowChunks != Chunks.DebugVisible)
         {
-            SetChunkDebugVisible(debugShowChunks);
+            Chunks.SetDebugVisible(debugShowChunks);
         }
     }
 
@@ -1155,10 +1139,10 @@ public class SplineRoad : MonoBehaviour
         }
 
         // One shared material keeps the chunks on the SRP batcher. A property block would split them.
-        RefreshRuntimeRoadMaterial();
-        if (runtimeRoadMaterial != null)
+        Chunks.RefreshMaterial(roadMaterial);
+        if (Chunks.Material != null)
         {
-            runtimeRoadMaterial.SetTexture("_SnowMap", snowTexture);
+            Chunks.Material.SetTexture("_SnowMap", snowTexture);
         }
 
         snowTextureDirty = false;
@@ -1329,7 +1313,7 @@ public class SplineRoad : MonoBehaviour
         // Physics keeps a coarse ribbon. A vertex every fifth of a meter on a 4 km track is wasted contact work.
         int colliderSegments = Mathf.Clamp(Mathf.Max(Mathf.CeilToInt(length * segmentsPerMeter), SculptRows - 1), 2, 400);
         BuildSurface(spline, length, colliderSegments, Columns, out Vector3[] colliderVertices, out Vector2[] colliderUvs, out Vector2[] colliderParametric, out int[] colliderTriangles, out Vector3[] colliderUps);
-        UploadMesh(ref roadMesh, "SplineRoad", colliderVertices, colliderUvs, colliderParametric, colliderTriangles, padBounds: false);
+        RoadMeshBuilder.UploadMesh(ref roadMesh, "SplineRoad", colliderVertices, colliderUvs, colliderParametric, colliderTriangles, padBounds: false);
 
         // The drawn surface is denser than the collider, and both axes are clamped so a long road stays bounded.
         int visualAcross = Mathf.Clamp(Mathf.RoundToInt(width / VisualVertexSpacing) + 1, Columns, MaxVisualColumns);
@@ -1337,8 +1321,8 @@ public class SplineRoad : MonoBehaviour
         BuildSurface(spline, length, visualSegments, visualAcross, out Vector3[] vertices, out Vector2[] uvs, out Vector2[] parametric, out int[] triangles, out _);
         var normals = new Vector3[vertices.Length];
         // Normals are accumulated on the full ribbon before the split, so chunk edges share one normal.
-        AccumulateNormals(vertices, triangles, normals);
-        BuildVisualChunks(vertices, uvs, parametric, normals, triangles, visualSegments, visualAcross);
+        RoadMeshBuilder.AccumulateNormals(vertices, triangles, normals);
+        Chunks.Build(roadMaterial, vertices, uvs, parametric, normals, triangles, visualSegments, visualAcross);
 
         // The collider mesh stays on this object. Drawing it as well would shade the whole track again.
         var filter = GetComponent<MeshFilter>();
@@ -1359,640 +1343,10 @@ public class SplineRoad : MonoBehaviour
         }
 
         // Walls stay on the coarse mesh. The snow shader fades to zero at the edge, so they still meet the road.
-        BuildWall(ref leftWall, ref leftWallMesh, "RoadWallLeft", colliderVertices, colliderUps, 0, Columns, colliderSegments);
-        BuildWall(ref rightWall, ref rightWallMesh, "RoadWallRight", colliderVertices, colliderUps, Columns - 1, Columns, colliderSegments);
+        Walls.Build(wallHeight, colliderVertices, colliderUps, Columns, colliderSegments);
         if (debugShowChunks)
         {
-            SetChunkDebugVisible(true);
-        }
-    }
-
-    /// <summary>
-    /// Cuts the visual road into short bands so the camera draws the nearby center
-    /// and leaves the side lips and the rest of the track outside the frustum.
-    /// Normals are copied from the full ribbon, so a vertex shared by two chunks keeps one normal.
-    /// </summary>
-    /// <param name="vertices">Road-local positions for the whole visual ribbon. Laid out ring by ring from the start of the spline, <paramref name="across"/> vertices per ring.</param>
-    /// <param name="uvs">Albedo texture coordinates, one per vertex, parallel to <paramref name="vertices"/>. x runs across the road, y runs along it.</param>
-    /// <param name="parametric">Spline coordinates per vertex, written to the mesh as uv2 for the snow mask. x is 0 at the left edge and 1 at the right. y is 0 at the start of the spline and 1 at the end.</param>
-    /// <param name="normals">Road-local normals accumulated over the whole ribbon, one per vertex. Shared edges match because the accumulation happened before the split.</param>
-    /// <param name="triangles">Triangle indices into <paramref name="vertices"/> for the whole ribbon, six per quad.</param>
-    /// <param name="segments">Quad count along the spline. The ribbon has <paramref name="segments"/> + 1 vertex rings.</param>
-    /// <param name="across">Vertex count across the road, including both edges.</param>
-    private void BuildVisualChunks(Vector3[] vertices, Vector2[] uvs, Vector2[] parametric, Vector3[] normals, int[] triangles, int segments, int across)
-    {
-        RefreshRuntimeRoadMaterial();
-        TryCreateVisualChunkRoot();
-
-        int alongCount = Mathf.Max(1, Mathf.CeilToInt(segments / (float)VisualChunkSegments));
-        // BuildSurface flips the whole ribbon together. The second index of the first
-        // triangle is the far ring when the winding was left as written.
-        bool flipped = triangles.Length >= 3 && triangles[1] != across;
-        int chunkIndex = 0;
-        for (int chunk = 0; chunk < alongCount; chunk++)
-        {
-            int segmentStart = chunk * VisualChunkSegments;
-            int segmentCount = Mathf.Min(VisualChunkSegments, segments - segmentStart);
-            int colStart = 0;
-            int quadsLeft = across - 1;
-            int bands = Mathf.Max(1, VisualBandCount);
-            for (int band = 0; band < bands && quadsLeft > 0; band++)
-            {
-                int bandsLeft = bands - band;
-                int bandQuads = Mathf.Max(1, Mathf.CeilToInt(quadsLeft / (float)bandsLeft));
-                if (bandQuads > quadsLeft)
-                {
-                    bandQuads = quadsLeft;
-                }
-
-                MeshRenderer chunkRenderer = GetVisualChunk(chunkIndex);
-                FillVisualChunk(
-                    visualChunkMeshes[chunkIndex],
-                    vertices,
-                    uvs,
-                    parametric,
-                    normals,
-                    across,
-                    segmentStart,
-                    segmentCount,
-                    colStart,
-                    bandQuads,
-                    flipped);
-                chunkRenderer.GetComponent<MeshFilter>().sharedMesh = visualChunkMeshes[chunkIndex];
-                chunkRenderer.gameObject.SetActive(true);
-
-                colStart += bandQuads;
-                quadsLeft -= bandQuads;
-                chunkIndex++;
-            }
-        }
-
-        for (int chunk = chunkIndex; chunk < visualChunkRenderers.Count; chunk++)
-        {
-            if (visualChunkRenderers[chunk] != null)
-            {
-                visualChunkRenderers[chunk].gameObject.SetActive(false);
-            }
-        }
-    }
-
-    private void FillVisualChunk(
-        Mesh mesh,
-        Vector3[] vertices,
-        Vector2[] uvs,
-        Vector2[] parametric,
-        Vector3[] normals,
-        int across,
-        int segmentStart,
-        int segmentCount,
-        int colStart,
-        int bandQuads,
-        bool flipped)
-    {
-        int localAcross = bandQuads + 1;
-        int localRings = segmentCount + 1;
-        var chunkVertices = new Vector3[localRings * localAcross];
-        var chunkUvs = new Vector2[chunkVertices.Length];
-        var chunkParametric = new Vector2[chunkVertices.Length];
-        var chunkNormals = new Vector3[chunkVertices.Length];
-        for (int ring = 0; ring < localRings; ring++)
-        {
-            int source = (segmentStart + ring) * across + colStart;
-            int dest = ring * localAcross;
-            Array.Copy(vertices, source, chunkVertices, dest, localAcross);
-            Array.Copy(uvs, source, chunkUvs, dest, localAcross);
-            Array.Copy(parametric, source, chunkParametric, dest, localAcross);
-            Array.Copy(normals, source, chunkNormals, dest, localAcross);
-        }
-
-        if (!ChunkHasLongEdge(chunkVertices, localAcross, localRings))
-        {
-            var chunkTriangles = new int[segmentCount * bandQuads * 6];
-            int cursor = 0;
-            for (int ring = 0; ring < segmentCount; ring++)
-            {
-                for (int column = 0; column < bandQuads; column++)
-                {
-                    int bottomLeft = ring * localAcross + column;
-                    int bottomRight = bottomLeft + 1;
-                    int topLeft = bottomLeft + localAcross;
-                    int topRight = topLeft + 1;
-                    WriteQuad(chunkTriangles, ref cursor, bottomLeft, bottomRight, topLeft, topRight, flipped);
-                }
-            }
-
-            UploadChunkMesh(mesh, chunkVertices, chunkUvs, chunkParametric, chunkNormals, chunkTriangles);
-            return;
-        }
-
-        var splitVerts = new List<Vector3>(chunkVertices.Length * 2);
-        var splitUvs = new List<Vector2>(chunkVertices.Length * 2);
-        var splitParametric = new List<Vector2>(chunkVertices.Length * 2);
-        var splitNormals = new List<Vector3>(chunkVertices.Length * 2);
-        var splitTris = new List<int>(segmentCount * bandQuads * 12);
-        for (int ring = 0; ring < segmentCount; ring++)
-        {
-            for (int column = 0; column < bandQuads; column++)
-            {
-                int bottomLeft = ring * localAcross + column;
-                int bottomRight = bottomLeft + 1;
-                int topLeft = bottomLeft + localAcross;
-                int topRight = topLeft + 1;
-                AppendSplitQuad(
-                    splitVerts,
-                    splitUvs,
-                    splitParametric,
-                    splitNormals,
-                    splitTris,
-                    chunkVertices,
-                    chunkUvs,
-                    chunkParametric,
-                    chunkNormals,
-                    bottomLeft,
-                    bottomRight,
-                    topLeft,
-                    topRight,
-                    flipped);
-            }
-        }
-
-        UploadChunkMesh(
-            mesh,
-            splitVerts.ToArray(),
-            splitUvs.ToArray(),
-            splitParametric.ToArray(),
-            splitNormals.ToArray(),
-            splitTris.ToArray());
-    }
-
-    private static bool ChunkHasLongEdge(Vector3[] vertices, int localAcross, int rings)
-    {
-        float limit = MaxVisualEdgeMeters * MaxVisualEdgeMeters;
-        for (int ring = 0; ring < rings; ring++)
-        {
-            int row = ring * localAcross;
-            for (int column = 0; column < localAcross; column++)
-            {
-                if (column + 1 < localAcross
-                    && (vertices[row + column] - vertices[row + column + 1]).sqrMagnitude > limit)
-                {
-                    return true;
-                }
-
-                if (ring + 1 < rings
-                    && (vertices[row + column] - vertices[row + localAcross + column]).sqrMagnitude > limit)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private static void AppendSplitQuad(
-        List<Vector3> positions,
-        List<Vector2> uvs,
-        List<Vector2> parametric,
-        List<Vector3> normals,
-        List<int> triangles,
-        Vector3[] sourcePositions,
-        Vector2[] sourceUvs,
-        Vector2[] sourceParametric,
-        Vector3[] sourceNormals,
-        int bottomLeft,
-        int bottomRight,
-        int topLeft,
-        int topRight,
-        bool flipped)
-    {
-        // Points on a shared edge depend only on that edge, so the quad on the other
-        // side cuts it in the same places and the seam does not open.
-        int blIndex = AddSourceVert(positions, uvs, parametric, normals, sourcePositions, sourceUvs, sourceParametric, sourceNormals, bottomLeft);
-        int brIndex = AddSourceVert(positions, uvs, parametric, normals, sourcePositions, sourceUvs, sourceParametric, sourceNormals, bottomRight);
-        int tlIndex = AddSourceVert(positions, uvs, parametric, normals, sourcePositions, sourceUvs, sourceParametric, sourceNormals, topLeft);
-        int trIndex = AddSourceVert(positions, uvs, parametric, normals, sourcePositions, sourceUvs, sourceParametric, sourceNormals, topRight);
-
-        var loop = new List<int>(16);
-        if (!flipped)
-        {
-            AddEdgePoints(loop, positions, uvs, parametric, normals, blIndex, tlIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, tlIndex, trIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, trIndex, brIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, brIndex, blIndex);
-        }
-        else
-        {
-            AddEdgePoints(loop, positions, uvs, parametric, normals, blIndex, brIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, brIndex, trIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, trIndex, tlIndex);
-            AddEdgePoints(loop, positions, uvs, parametric, normals, tlIndex, blIndex);
-        }
-
-        int center = AddLerpVert(positions, uvs, parametric, normals, blIndex, trIndex, 0.5f);
-        for (int i = 0; i < loop.Count; i++)
-        {
-            int start = loop[i];
-            int end = loop[(i + 1) % loop.Count];
-            SplitLongTriangle(positions, uvs, parametric, normals, triangles, start, end, center, true, false, false, 8);
-        }
-    }
-
-    private static void AddEdgePoints(
-        List<int> loop,
-        List<Vector3> positions,
-        List<Vector2> uvs,
-        List<Vector2> parametric,
-        List<Vector3> normals,
-        int from,
-        int to)
-    {
-        int steps = EdgeSteps(positions[from], positions[to]);
-        loop.Add(from);
-        for (int step = 1; step < steps; step++)
-        {
-            loop.Add(AddLerpVert(positions, uvs, parametric, normals, from, to, step / (float)steps));
-        }
-    }
-
-    private static int EdgeSteps(Vector3 a, Vector3 b)
-    {
-        float span = Vector3.Distance(a, b);
-        int steps = Mathf.CeilToInt(span / MaxVisualEdgeMeters);
-        if (steps < 1)
-        {
-            return 1;
-        }
-        // A 180 m lip is about twenty steps. Cap a broken edge so one quad cannot explode.
-        return Mathf.Min(steps, 32);
-    }
-
-    private static int AddSourceVert(
-        List<Vector3> positions,
-        List<Vector2> uvs,
-        List<Vector2> parametric,
-        List<Vector3> normals,
-        Vector3[] sourcePositions,
-        Vector2[] sourceUvs,
-        Vector2[] sourceParametric,
-        Vector3[] sourceNormals,
-        int source)
-    {
-        positions.Add(sourcePositions[source]);
-        uvs.Add(sourceUvs[source]);
-        parametric.Add(sourceParametric[source]);
-        normals.Add(sourceNormals[source]);
-        return positions.Count - 1;
-    }
-
-    private static int AddLerpVert(
-        List<Vector3> positions,
-        List<Vector2> uvs,
-        List<Vector2> parametric,
-        List<Vector3> normals,
-        int from,
-        int to,
-        float t)
-    {
-        positions.Add(Vector3.LerpUnclamped(positions[from], positions[to], t));
-        uvs.Add(Vector2.LerpUnclamped(uvs[from], uvs[to], t));
-        parametric.Add(Vector2.LerpUnclamped(parametric[from], parametric[to], t));
-        Vector3 normal = Vector3.LerpUnclamped(normals[from], normals[to], t);
-        normals.Add(normal.sqrMagnitude > 0.0001f ? normal.normalized : Vector3.up);
-        return positions.Count - 1;
-    }
-
-    private static void SplitLongTriangle(
-        List<Vector3> positions,
-        List<Vector2> uvs,
-        List<Vector2> parametric,
-        List<Vector3> normals,
-        List<int> triangles,
-        int a,
-        int b,
-        int c,
-        bool boundaryAB,
-        bool boundaryBC,
-        bool boundaryCA,
-        int depth)
-    {
-        float limit = MaxVisualEdgeMeters * MaxVisualEdgeMeters;
-        float ab = (positions[a] - positions[b]).sqrMagnitude;
-        float bc = (positions[b] - positions[c]).sqrMagnitude;
-        float ca = (positions[c] - positions[a]).sqrMagnitude;
-        bool longAB = !boundaryAB && ab > limit;
-        bool longBC = !boundaryBC && bc > limit;
-        bool longCA = !boundaryCA && ca > limit;
-        if (depth <= 0 || (!longAB && !longBC && !longCA))
-        {
-            triangles.Add(a);
-            triangles.Add(b);
-            triangles.Add(c);
-            return;
-        }
-
-        if (longAB && ab >= bc && ab >= ca)
-        {
-            int mid = AddLerpVert(positions, uvs, parametric, normals, a, b, 0.5f);
-            SplitLongTriangle(positions, uvs, parametric, normals, triangles, a, mid, c, false, false, boundaryCA, depth - 1);
-            SplitLongTriangle(positions, uvs, parametric, normals, triangles, mid, b, c, false, boundaryBC, false, depth - 1);
-            return;
-        }
-
-        if (longBC && bc >= ca)
-        {
-            int mid = AddLerpVert(positions, uvs, parametric, normals, b, c, 0.5f);
-            SplitLongTriangle(positions, uvs, parametric, normals, triangles, a, b, mid, boundaryAB, false, false, depth - 1);
-            SplitLongTriangle(positions, uvs, parametric, normals, triangles, a, mid, c, false, false, boundaryCA, depth - 1);
-            return;
-        }
-
-        int split = AddLerpVert(positions, uvs, parametric, normals, c, a, 0.5f);
-        SplitLongTriangle(positions, uvs, parametric, normals, triangles, a, b, split, boundaryAB, false, false, depth - 1);
-        SplitLongTriangle(positions, uvs, parametric, normals, triangles, split, b, c, false, boundaryBC, false, depth - 1);
-    }
-
-    private static void WriteQuad(int[] triangles, ref int cursor, int bottomLeft, int bottomRight, int topLeft, int topRight, bool flipped)
-    {
-        if (!flipped)
-        {
-            triangles[cursor++] = bottomLeft;
-            triangles[cursor++] = topLeft;
-            triangles[cursor++] = bottomRight;
-            triangles[cursor++] = bottomRight;
-            triangles[cursor++] = topLeft;
-            triangles[cursor++] = topRight;
-            return;
-        }
-
-        triangles[cursor++] = bottomLeft;
-        triangles[cursor++] = bottomRight;
-        triangles[cursor++] = topLeft;
-        triangles[cursor++] = bottomRight;
-        triangles[cursor++] = topRight;
-        triangles[cursor++] = topLeft;
-    }
-
-    private static void UploadChunkMesh(Mesh mesh, Vector3[] vertices, Vector2[] uvs, Vector2[] parametric, Vector3[] normals, int[] triangles)
-    {
-        mesh.Clear();
-        mesh.indexFormat = vertices.Length > 65535
-            ? UnityEngine.Rendering.IndexFormat.UInt32
-            : UnityEngine.Rendering.IndexFormat.UInt16;
-        mesh.vertices = vertices;
-        mesh.uv = uvs;
-        mesh.uv2 = parametric;
-        mesh.normals = normals;
-        mesh.triangles = triangles;
-        mesh.RecalculateBounds();
-        var bounds = mesh.bounds;
-        bounds.Expand(3f);
-        mesh.bounds = bounds;
-    }
-
-    private bool TryCreateVisualChunkRoot()
-    {
-        if (visualChunkRoot != null)
-        {
-            return false;
-        }
-
-        var rootObject = new GameObject("RoadSnowChunks");
-        rootObject.hideFlags = HideFlags.HideAndDontSave;
-        rootObject.transform.SetParent(transform, false);
-        visualChunkRoot = rootObject.transform;
-        return true;
-    }
-
-    private MeshRenderer GetVisualChunk(int index)
-    {
-        while (visualChunkRenderers.Count <= index)
-        {
-            var chunkObject = new GameObject("RoadSnowChunk");
-            chunkObject.hideFlags = HideFlags.HideAndDontSave;
-            chunkObject.transform.SetParent(visualChunkRoot, false);
-            chunkObject.AddComponent<MeshFilter>();
-            var renderer = chunkObject.AddComponent<MeshRenderer>();
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-            renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-            renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-            if (runtimeRoadMaterial != null)
-            {
-                renderer.sharedMaterial = runtimeRoadMaterial;
-            }
-
-            var mesh = new Mesh { name = "RoadSnowChunk", hideFlags = HideFlags.HideAndDontSave };
-            visualChunkMeshes.Add(mesh);
-            visualChunkRenderers.Add(renderer);
-        }
-
-        var chunkRenderer = visualChunkRenderers[index];
-        if (runtimeRoadMaterial != null && chunkRenderer.sharedMaterial != runtimeRoadMaterial)
-        {
-            chunkRenderer.sharedMaterial = runtimeRoadMaterial;
-        }
-
-        return chunkRenderer;
-    }
-
-    private void RefreshRuntimeRoadMaterial()
-    {
-        if (roadMaterial == null)
-        {
-            return;
-        }
-
-        if (runtimeRoadMaterial != null && runtimeRoadSource == roadMaterial)
-        {
-            return;
-        }
-
-        ReleaseRuntimeRoadMaterial();
-        runtimeRoadMaterial = new Material(roadMaterial)
-        {
-            name = "RoadSnowRuntime",
-            hideFlags = HideFlags.HideAndDontSave
-        };
-        runtimeRoadSource = roadMaterial;
-        for (int i = 0; i < visualChunkRenderers.Count; i++)
-        {
-            if (visualChunkRenderers[i] != null)
-            {
-                visualChunkRenderers[i].sharedMaterial = runtimeRoadMaterial;
-            }
-        }
-    }
-
-    private void ReleaseRuntimeRoadMaterial()
-    {
-        if (runtimeRoadMaterial == null)
-        {
-            return;
-        }
-
-        if (Application.isPlaying)
-        {
-            Destroy(runtimeRoadMaterial);
-        }
-        else
-        {
-            DestroyImmediate(runtimeRoadMaterial);
-        }
-
-        runtimeRoadMaterial = null;
-        runtimeRoadSource = null;
-    }
-
-    // Solid colors instead of the snow material, so each chunk reads as its own mesh.
-    private void SetChunkDebugVisible(bool visible)
-    {
-        debugChunksVisible = visible;
-        if (!visible)
-        {
-            for (int i = 0; i < visualChunkRenderers.Count; i++)
-            {
-                if (visualChunkRenderers[i] != null && runtimeRoadMaterial != null)
-                {
-                    visualChunkRenderers[i].sharedMaterial = runtimeRoadMaterial;
-                }
-            }
-
-            ReleaseChunkDebugMaterials();
-            return;
-        }
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null)
-        {
-            shader = Shader.Find("Unlit/Color");
-        }
-
-        if (shader == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < visualChunkRenderers.Count; i++)
-        {
-            MeshRenderer chunkRenderer = visualChunkRenderers[i];
-            if (chunkRenderer == null)
-            {
-                continue;
-            }
-
-            while (chunkDebugMaterials.Count <= i)
-            {
-                chunkDebugMaterials.Add(null);
-            }
-
-            if (chunkDebugMaterials[i] == null)
-            {
-                Color color = Color.HSVToRGB(Mathf.Repeat(i * 0.17f, 1f), 0.65f, 1f);
-                var material = new Material(shader)
-                {
-                    name = "RoadChunkDebug",
-                    hideFlags = HideFlags.HideAndDontSave,
-                    color = color
-                };
-                if (material.HasProperty("_BaseColor"))
-                {
-                    material.SetColor("_BaseColor", color);
-                }
-
-                chunkDebugMaterials[i] = material;
-            }
-
-            chunkRenderer.sharedMaterial = chunkDebugMaterials[i];
-        }
-    }
-
-    private void ReleaseChunkDebugMaterials()
-    {
-        for (int i = 0; i < chunkDebugMaterials.Count; i++)
-        {
-            if (chunkDebugMaterials[i] == null)
-            {
-                continue;
-            }
-
-            if (Application.isPlaying)
-            {
-                Destroy(chunkDebugMaterials[i]);
-            }
-            else
-            {
-                DestroyImmediate(chunkDebugMaterials[i]);
-            }
-        }
-
-        chunkDebugMaterials.Clear();
-    }
-
-    private void ReleaseVisualChunks()
-    {
-        for (int i = 0; i < visualChunkMeshes.Count; i++)
-        {
-            if (visualChunkMeshes[i] == null)
-            {
-                continue;
-            }
-
-            if (Application.isPlaying)
-            {
-                Destroy(visualChunkMeshes[i]);
-            }
-            else
-            {
-                DestroyImmediate(visualChunkMeshes[i]);
-            }
-        }
-
-        visualChunkMeshes.Clear();
-        visualChunkRenderers.Clear();
-        debugChunksVisible = false;
-        if (visualChunkRoot == null)
-        {
-            return;
-        }
-
-        if (Application.isPlaying)
-        {
-            Destroy(visualChunkRoot.gameObject);
-        }
-        else
-        {
-            DestroyImmediate(visualChunkRoot.gameObject);
-        }
-
-        visualChunkRoot = null;
-    }
-
-    private static void AccumulateNormals(Vector3[] vertices, int[] triangles, Vector3[] normals)
-    {
-        Array.Clear(normals, 0, normals.Length);
-        for (int i = 0; i < triangles.Length; i += 3)
-        {
-            int a = triangles[i];
-            int b = triangles[i + 1];
-            int c = triangles[i + 2];
-            Vector3 normal = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
-            normals[a] += normal;
-            normals[b] += normal;
-            normals[c] += normal;
-        }
-
-        for (int i = 0; i < normals.Length; i++)
-        {
-            if (normals[i].sqrMagnitude > 1e-10f)
-            {
-                normals[i].Normalize();
-            }
-            else
-            {
-                normals[i] = Vector3.up;
-            }
+            Chunks.SetDebugVisible(true);
         }
     }
 
@@ -2087,33 +1441,6 @@ public class SplineRoad : MonoBehaviour
         }
     }
 
-    private void UploadMesh(ref Mesh mesh, string meshName, Vector3[] vertices, Vector2[] uvs, Vector2[] parametric, int[] triangles, bool padBounds)
-    {
-        if (mesh == null)
-        {
-            mesh = new Mesh { name = meshName };
-            mesh.hideFlags = HideFlags.HideAndDontSave;
-        }
-
-        mesh.Clear();
-        mesh.indexFormat = vertices.Length > 65535
-            ? UnityEngine.Rendering.IndexFormat.UInt32
-            : UnityEngine.Rendering.IndexFormat.UInt16;
-        mesh.vertices = vertices;
-        mesh.uv = uvs;
-        mesh.uv2 = parametric;
-        mesh.triangles = triangles;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-        if (padBounds)
-        {
-            // The shader lifts snow off this mesh. Padding keeps the drifts inside the bounds.
-            var bounds = mesh.bounds;
-            bounds.Expand(3f);
-            mesh.bounds = bounds;
-        }
-    }
-
     private PhysicsMaterial RoadPhysics()
     {
         if (roadPhysics == null)
@@ -2133,159 +1460,6 @@ public class SplineRoad : MonoBehaviour
         return roadPhysics;
     }
 
-    private PhysicsMaterial WallPhysics()
-    {
-        if (wallPhysics == null)
-        {
-            wallPhysics = new PhysicsMaterial("RoadWall")
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-                dynamicFriction = 0f,
-                staticFriction = 0f,
-                bounciness = 0f,
-                bounceCombine = PhysicsMaterialCombine.Minimum,
-                frictionCombine = PhysicsMaterialCombine.Minimum,
-            };
-        }
-
-        return wallPhysics;
-    }
-
-    private Material WallSurfaceMaterial()
-    {
-        if (runtimeWallMaterial != null)
-        {
-            return runtimeWallMaterial;
-        }
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null)
-        {
-            return null;
-        }
-
-        runtimeWallMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave, name = "RoadWall" };
-        var color = new Color(0.9f, 0.95f, 1f, 1f);
-        runtimeWallMaterial.SetColor("_BaseColor", color);
-        runtimeWallMaterial.SetColor("_Color", color);
-        return runtimeWallMaterial;
-    }
-
-    private void BuildWall(ref Transform wall, ref Mesh mesh, string wallName, Vector3[] roadVertices, Vector3[] ups, int edge, int across, int segments)
-    {
-        wall = FindOrCreateWall(wall, wallName);
-        bool active = wallHeight > 0.001f;
-        wall.gameObject.SetActive(active);
-        if (!active)
-        {
-            return;
-        }
-
-        int rings = segments + 1;
-        var vertices = new Vector3[rings * 2];
-        var triangles = new int[segments * 6];
-        float height = wallHeight;
-
-        for (int i = 0; i < rings; i++)
-        {
-            Vector3 bottom = roadVertices[i * across + edge];
-            vertices[i * 2] = bottom;
-            vertices[i * 2 + 1] = bottom + ups[i] * height;
-        }
-
-        bool leftEdge = edge == 0;
-        for (int i = 0; i < segments; i++)
-        {
-            int bottom0 = i * 2;
-            int top0 = bottom0 + 1;
-            int bottom1 = bottom0 + 2;
-            int top1 = bottom0 + 3;
-            int tri = i * 6;
-            if (leftEdge)
-            {
-                triangles[tri] = bottom0;
-                triangles[tri + 1] = top0;
-                triangles[tri + 2] = bottom1;
-                triangles[tri + 3] = bottom1;
-                triangles[tri + 4] = top0;
-                triangles[tri + 5] = top1;
-            }
-            else
-            {
-                triangles[tri] = bottom0;
-                triangles[tri + 1] = bottom1;
-                triangles[tri + 2] = top0;
-                triangles[tri + 3] = bottom1;
-                triangles[tri + 4] = top1;
-                triangles[tri + 5] = top0;
-            }
-        }
-
-        if (mesh == null)
-        {
-            mesh = new Mesh { name = wallName };
-            mesh.hideFlags = HideFlags.HideAndDontSave;
-        }
-
-        mesh.Clear();
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-
-        var filter = wall.GetComponent<MeshFilter>();
-        filter.sharedMesh = mesh;
-
-        var collider = wall.GetComponent<MeshCollider>();
-        collider.convex = false;
-        collider.sharedMesh = null;
-        collider.sharedMesh = mesh;
-        collider.sharedMaterial = WallPhysics();
-
-        var renderer = wall.GetComponent<MeshRenderer>();
-        Material surface = WallSurfaceMaterial();
-        if (surface != null)
-        {
-            renderer.sharedMaterial = surface;
-        }
-        // The wall shader is unlit, and a 4 km ribbon in four shadow cascades is pure overhead.
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
-    }
-
-    private Transform FindOrCreateWall(Transform cached, string wallName)
-    {
-        if (cached != null)
-        {
-            return cached;
-        }
-
-        Transform found = transform.Find(wallName);
-        if (found == null)
-        {
-            var wallObject = new GameObject(wallName);
-            wallObject.transform.SetParent(transform, false);
-            found = wallObject.transform;
-        }
-
-        if (found.GetComponent<MeshFilter>() == null)
-        {
-            found.gameObject.AddComponent<MeshFilter>();
-        }
-
-        if (found.GetComponent<MeshCollider>() == null)
-        {
-            found.gameObject.AddComponent<MeshCollider>();
-        }
-
-        if (found.GetComponent<MeshRenderer>() == null)
-        {
-            found.gameObject.AddComponent<MeshRenderer>();
-        }
-
-        return found;
-    }
-
     private void OnValidate()
     {
         width = Mathf.Max(1f, width);
@@ -2299,7 +1473,7 @@ public class SplineRoad : MonoBehaviour
             {
                 if (this != null && isActiveAndEnabled)
                 {
-                    SetChunkDebugVisible(debugShowChunks);
+                    Chunks.SetDebugVisible(debugShowChunks);
                 }
             };
 #endif

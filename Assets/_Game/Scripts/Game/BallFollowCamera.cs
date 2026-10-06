@@ -7,7 +7,7 @@ using UnityEngine;
 /// </summary>
 public class BallFollowCamera : MonoBehaviour
 {
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
     [SerializeField] private float distance = 8f;
     [SerializeField] private float height = 3.5f;
     [SerializeField] private float lookHeight = 0.6f;
@@ -42,7 +42,7 @@ public class BallFollowCamera : MonoBehaviour
             return;
         }
 
-        Rigidbody body = launch.Body;
+        Rigidbody body = sled.Body;
         Vector3 targetPosition = body.transform.position;
         Vector3 travel = body.linearVelocity;
         if (travel.sqrMagnitude >= minSpeed * minSpeed)
@@ -58,9 +58,9 @@ public class BallFollowCamera : MonoBehaviour
                 stableFacing = Vector3.Slerp(stableFacing, aim, turn);
             }
         }
-        else if (stableFacing.sqrMagnitude < 0.001f && launch.StableFacing.sqrMagnitude > 0.001f)
+        else if (stableFacing.sqrMagnitude < 0.001f && sled.StableFacing.sqrMagnitude > 0.001f)
         {
-            stableFacing = launch.StableFacing.normalized;
+            stableFacing = sled.StableFacing.normalized;
         }
 
         if (stableFacing.sqrMagnitude < 0.001f)
@@ -73,9 +73,9 @@ public class BallFollowCamera : MonoBehaviour
         previousTargetPosition = targetPosition;
         hasTargetPosition = true;
 
-        if (teleported && launch.StableFacing.sqrMagnitude > 0.001f)
+        if (teleported && sled.StableFacing.sqrMagnitude > 0.001f)
         {
-            stableFacing = launch.StableFacing.normalized;
+            stableFacing = sled.StableFacing.normalized;
         }
 
         Vector3 desired = targetPosition - stableFacing * distance + Vector3.up * height;

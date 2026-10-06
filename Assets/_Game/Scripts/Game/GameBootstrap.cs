@@ -7,7 +7,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-100)]
 public class GameBootstrap : MonoBehaviour
 {
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
     [SerializeField] private SledRider rider;
     [SerializeField] private PathCoins pathCoins;
     [SerializeField] private RideHud hud;
@@ -27,16 +27,16 @@ public class GameBootstrap : MonoBehaviour
         economy = new RunEconomy(repository.Load());
         economy.Changed += SaveProgress;
 
-        launch.Initialize(economy);
+        sled.Initialize(economy);
         hud.Initialize(economy);
 
-        launch.RunFinished += BankRun;
-        launch.Crashed += rider.PlayCrash;
-        launch.RunReset += rider.StopCrash;
+        sled.RunFinished += BankRun;
+        sled.Crashed += rider.PlayCrash;
+        sled.RunReset += rider.StopCrash;
 
-        launch.Armed += runAudio.PlaySitDown;
-        launch.Slowed += runAudio.PlaySlowHit;
-        launch.Crashed += runAudio.PlayCrash;
+        sled.Armed += runAudio.PlaySitDown;
+        sled.Slowed += runAudio.PlaySlowHit;
+        sled.Crashed += runAudio.PlayCrash;
         pathCoins.Picked += runAudio.PlayCoin;
         hud.Clicked += runAudio.PlayClick;
 
@@ -45,14 +45,14 @@ public class GameBootstrap : MonoBehaviour
             Obstacle[] obstacles = obstacleRoots[i].GetComponentsInChildren<Obstacle>(true);
             for (int j = 0; j < obstacles.Length; j++)
             {
-                launch.RunReset += obstacles[j].Restore;
+                sled.RunReset += obstacles[j].Restore;
             }
         }
     }
 
     private void BankRun()
     {
-        economy.CommitRun(pathCoins.Collected, launch.RunDistanceMeters);
+        economy.CommitRun(pathCoins.Collected, sled.RunDistanceMeters);
     }
 
     private void SaveProgress()

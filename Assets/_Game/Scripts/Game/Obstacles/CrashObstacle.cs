@@ -5,7 +5,7 @@ using UnityEngine;
 /// </summary>
 public class CrashObstacle : Obstacle
 {
-    protected override void Apply(SlingshotLaunch sled)
+    protected override void Apply(Sled sled)
     {
         sled.Crash();
     }

@@ -8,7 +8,7 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class DecorVisibility : MonoBehaviour
 {
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
     [Tooltip("Props farther than this from the sled, in meters, are turned off.")]
     [SerializeField] private float visibleRange = 350f;
 
@@ -31,11 +31,11 @@ public class DecorVisibility : MonoBehaviour
 
     private void LateUpdate()
     {
-        Vector3 sled = launch.Body.position;
+        Vector3 sledPosition = sled.Body.position;
         float limit = visibleRange * visibleRange;
         for (int i = 0; i < props.Length; i++)
         {
-            bool visible = (positions[i] - sled).sqrMagnitude <= limit;
+            bool visible = (positions[i] - sledPosition).sqrMagnitude <= limit;
             if (props[i].activeSelf != visible)
             {
                 props[i].SetActive(visible);

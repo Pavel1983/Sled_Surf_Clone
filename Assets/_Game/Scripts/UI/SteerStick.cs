@@ -13,7 +13,8 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class SteerStick : MonoBehaviour
 {
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
+    [SerializeField] private SledSteering steering;
     [Tooltip("Ring radius in pixels at the reference screen height.")]
     [SerializeField] private float ringRadius = 180f;
     [Tooltip("Knob radius in pixels at the reference screen height.")]
@@ -31,7 +32,7 @@ public class SteerStick : MonoBehaviour
 
     private void Update()
     {
-        if (!launch.CanSteer)
+        if (!sled.CanSteer)
         {
             EndStroke();
             return;
@@ -78,7 +79,7 @@ public class SteerStick : MonoBehaviour
             steer = 0f;
         }
 
-        launch.SteerInput = Mathf.Clamp(steer, -1f, 1f);
+        steering.Input = Mathf.Clamp(steer, -1f, 1f);
 
         if (ended)
         {
@@ -91,7 +92,7 @@ public class SteerStick : MonoBehaviour
         tracking = false;
         trackedTouchId = -1;
         root.gameObject.SetActive(false);
-        launch.SteerInput = 0f;
+        steering.Input = 0f;
     }
 
     private bool TryReadPointer(out bool began, out bool ended, out Vector2 screen)

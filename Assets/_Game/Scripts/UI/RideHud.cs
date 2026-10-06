@@ -42,7 +42,8 @@ public class RideHud : MonoBehaviour
     /// </summary>
     public event Action Clicked;
 
-    [SerializeField] private SlingshotLaunch launch;
+    [SerializeField] private Sled sled;
+    [SerializeField] private SlingshotPull slingshot;
     [SerializeField] private PathCoins pathCoins;
     [SerializeField] private float speedGaugeMaxKmh = 180f;
     [SerializeField] private float speedSharpness = 9f;
@@ -105,8 +106,8 @@ public class RideHud : MonoBehaviour
         ApplySafeArea();
         ShowCoins();
 
-        bool aiming = launch.IsAiming;
-        bool riding = launch.IsRiding;
+        bool aiming = slingshot.IsAiming;
+        bool riding = sled.IsRiding;
         if (tensionRoot.activeSelf != aiming)
         {
             tensionRoot.SetActive(aiming);
@@ -144,13 +145,13 @@ public class RideHud : MonoBehaviour
 
     private void PressPlay()
     {
-        launch.ArmPlay();
+        sled.ArmPlay();
         Clicked?.Invoke();
     }
 
     private void PressRestart()
     {
-        launch.Restart();
+        sled.Restart();
         Clicked?.Invoke();
     }
 
@@ -162,20 +163,20 @@ public class RideHud : MonoBehaviour
 
     private void ShowCoins()
     {
-        int coins = economy.DisplayCoins(pathCoins.Collected, launch.RunDistanceMeters);
+        int coins = economy.DisplayCoins(pathCoins.Collected, sled.RunDistanceMeters);
         SetText(coinLabel, coins.ToString(CultureInfo.InvariantCulture));
     }
 
     private void ShowTension()
     {
-        float tension = launch.Tension01;
+        float tension = slingshot.Tension01;
         tensionFill.Fill = tension;
         SetText(tensionLabel, Percent(tension));
     }
 
     private void ShowRide()
     {
-        float target = launch.SurfaceSpeed * MetersPerSecondToKmh;
+        float target = sled.SurfaceSpeed * MetersPerSecondToKmh;
         if (Mathf.Abs(displayedKmh - target) < 0.08f)
         {
             displayedKmh = target;
@@ -190,15 +191,15 @@ public class RideHud : MonoBehaviour
         SetText(speedLabel, speed.ToString(CultureInfo.InvariantCulture));
         speedFill.Fill = Mathf.Clamp01(displayedKmh / Mathf.Max(1f, speedGaugeMaxKmh));
 
-        int meters = Mathf.Max(0, Mathf.RoundToInt(launch.RunDistanceMeters));
+        int meters = Mathf.Max(0, Mathf.RoundToInt(sled.RunDistanceMeters));
         SetText(distanceLabel, meters.ToString(CultureInfo.InvariantCulture) + "m");
         // The plate grows with the number, so a long distance still fits inside it.
         float plateWidth = Mathf.Max(168f, distanceLabel.preferredWidth + 72f);
         distancePlate.sizeDelta = new Vector2(plateWidth, 96f);
         distanceShadow.sizeDelta = new Vector2(plateWidth + 18f, 108f);
 
-        float finishMeters = Mathf.Max(0.01f, launch.FinishMeters);
-        float progress = Mathf.Clamp01(launch.RunDistanceMeters / finishMeters);
+        float finishMeters = Mathf.Max(0.01f, sled.FinishMeters);
+        float progress = Mathf.Clamp01(sled.RunDistanceMeters / finishMeters);
         SetText(progressLabel, Percent(progress));
         float fillHeight = BarHeight * progress;
         bool showFill = fillHeight > 2f;
@@ -212,7 +213,7 @@ public class RideHud : MonoBehaviour
             progressFill.sizeDelta = new Vector2(BarWidth, fillHeight);
         }
 
-        bool showBest = launch.PreviousBestMeters > 1f;
+        bool showBest = sled.PreviousBestMeters > 1f;
         if (bestRoot.gameObject.activeSelf != showBest)
         {
             bestRoot.gameObject.SetActive(showBest);
@@ -220,15 +221,15 @@ public class RideHud : MonoBehaviour
 
         if (showBest)
         {
-            float along = Mathf.Clamp01(launch.PreviousBestMeters / finishMeters);
+            float along = Mathf.Clamp01(sled.PreviousBestMeters / finishMeters);
             bestRoot.anchoredPosition = new Vector2(16f, BarHeight * along);
         }
     }
 
     private void ShowScreens()
     {
-        bool showStart = !launch.PlayArmed && !launch.IsRiding && !launch.IsStopped;
-        bool showResults = launch.ResultsReady;
+        bool showStart = !sled.PlayArmed && !sled.IsRiding && !sled.IsStopped;
+        bool showResults = sled.ResultsReady;
         if (startRoot.activeSelf != showStart)
         {
             startRoot.SetActive(showStart);
@@ -249,7 +250,7 @@ public class RideHud : MonoBehaviour
 
         if (showResults)
         {
-            SetText(resultsDistance, FormatDistance(launch.RunDistanceMeters));
+            SetText(resultsDistance, FormatDistance(sled.RunDistanceMeters));
             SetText(resultsMoney, "+" + economy.LastRunValue.ToString(CultureInfo.InvariantCulture));
         }
     }
