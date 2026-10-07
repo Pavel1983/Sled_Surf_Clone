@@ -8,4 +8,5 @@ public class PlayerProgress
     public int FrictionLevel;
     public int IncomeLevel;
     public int RunsCompleted;
+    public float BestDistanceMeters;
 }

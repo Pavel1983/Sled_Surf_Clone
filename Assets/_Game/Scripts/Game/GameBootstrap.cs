@@ -7,6 +7,8 @@ using UnityEngine;
 [DefaultExecutionOrder(-100)]
 public class GameBootstrap : MonoBehaviour
 {
+    private const float MinBestGateMeters = 30f;
+
     [SerializeField] private Sled sled;
     [SerializeField] private SledRider rider;
     [SerializeField] private PathCoins pathCoins;
@@ -14,6 +16,10 @@ public class GameBootstrap : MonoBehaviour
     [SerializeField] private RunAudio runAudio;
     [Tooltip("Parents of everything the sled can hit. Obstacles under them come back when a run restarts.")]
     [SerializeField] private Transform[] obstacleRoots;
+    [Tooltip("The wall that marks the player's best distance.")]
+    [SerializeField] private DistanceGate bestGate;
+    [Tooltip("The wall that marks the end of the run.")]
+    [SerializeField] private DistanceGate finishGate;
 
     private ProgressRepository repository;
     private RunEconomy economy;
@@ -47,6 +53,29 @@ public class GameBootstrap : MonoBehaviour
             {
                 sled.RunReset += obstacles[j].Restore;
             }
+        }
+    }
+
+    // In Start, not Awake: the road has to be enabled before anything can be stood on it.
+    private void Start()
+    {
+        sled.RunReset += PlaceGates;
+        PlaceGates();
+    }
+
+    private void PlaceGates()
+    {
+        finishGate.Place(sled.FinishMeters);
+
+        // A record right behind the start pad or on top of the finish would only be noise.
+        float best = economy.BestDistanceMeters;
+        if (best > MinBestGateMeters && best < sled.FinishMeters - MinBestGateMeters)
+        {
+            bestGate.Place(best);
+        }
+        else
+        {
+            bestGate.Remove();
         }
     }
 

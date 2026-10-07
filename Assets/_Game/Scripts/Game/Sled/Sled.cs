@@ -79,7 +79,6 @@ public class Sled : MonoBehaviour
     private float restTimer;
     private float distanceMeters;
     private float runMaxMeters;
-    private float previousMaxMeters;
     private float surfaceSpeed;
     private Vector3 surfaceNormal = Vector3.up;
 
@@ -120,7 +119,6 @@ public class Sled : MonoBehaviour
 
     public float DistanceMeters => distanceMeters;
     public float RunDistanceMeters => runMaxMeters;
-    public float PreviousBestMeters => previousMaxMeters;
 
     /// <summary>
     /// Speed along the road surface, in meters per second. The part pointing out of the surface is left out.
@@ -606,11 +604,6 @@ public class Sled : MonoBehaviour
         PlayArmed = false;
         RunSerial++;
         RunReset?.Invoke();
-        if (runMaxMeters > 1f)
-        {
-            previousMaxMeters = runMaxMeters;
-        }
-
         launched = false;
         pendingLaunch = false;
         stopped = false;

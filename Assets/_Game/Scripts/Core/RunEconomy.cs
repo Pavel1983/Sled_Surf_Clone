@@ -35,6 +35,9 @@ public class RunEconomy
 
     public int LastRunValue { get; private set; }
 
+    /// <summary>The farthest any finished run has gone, in meters. It changes when a run is banked, not during it.</summary>
+    public float BestDistanceMeters => progress.BestDistanceMeters;
+
     public int IncomePerKilometer => BasePerKilometer + progress.IncomeLevel * PerKilometerStep;
 
     /// <summary>Multiplier on the launch speed.</summary>
@@ -68,6 +71,7 @@ public class RunEconomy
         progress.FrictionLevel = 0;
         progress.IncomeLevel = 0;
         progress.RunsCompleted = 0;
+        progress.BestDistanceMeters = 0f;
         LastRunValue = 0;
         Changed?.Invoke();
     }
@@ -86,6 +90,7 @@ public class RunEconomy
         LastRunValue = Earnings(distanceMeters, collected);
         progress.Coins += LastRunValue;
         progress.RunsCompleted++;
+        progress.BestDistanceMeters = Mathf.Max(progress.BestDistanceMeters, distanceMeters);
         Changed?.Invoke();
     }
 

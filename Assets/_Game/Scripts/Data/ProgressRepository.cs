@@ -10,6 +10,7 @@ public class ProgressRepository
     private const string FrictionKey = "SledSurf.Speed";
     private const string IncomeKey = "SledSurf.Income";
     private const string RunsKey = "SledSurf.Runs";
+    private const string BestDistanceKey = "SledSurf.BestDistance";
 
     public PlayerProgress Load()
     {
@@ -19,7 +20,8 @@ public class ProgressRepository
             LaunchLevel = Mathf.Max(0, PlayerPrefs.GetInt(LaunchKey, 0)),
             FrictionLevel = Mathf.Max(0, PlayerPrefs.GetInt(FrictionKey, 0)),
             IncomeLevel = Mathf.Max(0, PlayerPrefs.GetInt(IncomeKey, 0)),
-            RunsCompleted = Mathf.Max(0, PlayerPrefs.GetInt(RunsKey, 0))
+            RunsCompleted = Mathf.Max(0, PlayerPrefs.GetInt(RunsKey, 0)),
+            BestDistanceMeters = Mathf.Max(0f, PlayerPrefs.GetFloat(BestDistanceKey, 0f))
         };
     }
 
@@ -30,6 +32,7 @@ public class ProgressRepository
         PlayerPrefs.SetInt(FrictionKey, progress.FrictionLevel);
         PlayerPrefs.SetInt(IncomeKey, progress.IncomeLevel);
         PlayerPrefs.SetInt(RunsKey, progress.RunsCompleted);
+        PlayerPrefs.SetFloat(BestDistanceKey, progress.BestDistanceMeters);
         PlayerPrefs.Save();
     }
 }

@@ -26,6 +26,7 @@ The sled is the object named `Slider`. The road is the `Level1_Road` prefab.
 - Sounds from the Ladybug pack: obstacle impacts, her voice on a hit, the sit-down, a sharp turn on the snow, a landing, a coin pickup and button taps.
 - Three obstacles, placed by hand in the scene. An iceberg and an electric gate end the run. A frozen bench keeps about a third of the current speed. Prefabs are in `Assets/_Game/Prefabs/Obstacles/Crash` and `.../Slow`.
 - Street props from the Ladybug pack along both sides of the run, and each one is an obstacle. Buses, news vans and hedges end the run. Flower beds, flower carts, barriers and pizza signs break and keep about a third of the speed. Only the props near the sled are switched on.
+- Two see-through walls across the whole road. One stands at the player's best distance and says BEST, the other is a chequered wall at the finish. Each appears when the sled gets near, and when the sled passes it the wall is gone and confetti goes off.
 - The run also ends if the sled stops, if it starts sliding backward, or when it reaches the finish.
 - The finish is **70% of the spline**, not a shorter mesh. `finishFraction` on `Slider` changes that. Set it to `1` to require the whole road.
 - After the run, a results card shows distance and coins earned. Upgrades bought before the next launch are saved with `PlayerPrefs`: slingshot power, lower sled friction, and coins paid per kilometre.
@@ -113,6 +114,7 @@ Remove `--verify-no-changes` to let it fix what it finds.
 - Sounds are played by one listener, `RunAudio`. The sled, the coins and the HUD only raise events, and the clips live in one `RunSounds` asset.
 - `GameBootstrap` is the one composition root. It loads the saved progress, hands the economy to the sled and the HUD, and connects the events. Nothing looks other objects up at runtime: references are set in the inspector.
 - The HUD matches the Sled Surfers reference: pull tension, distance, speed along the surface, and progress to the finish. Its hierarchy lives in the scene, and `RideHud` only writes the numbers into it. It is not built from the Ladybug UI textures.
+- The best distance is saved with the rest of the progress. `DistanceGate` is one class for both walls: it only knows a distance, and `GameBootstrap` decides where the record wall and the finish wall go at the start of each run.
 - Coins from a run are distance pay plus coins picked up. A retry does not add that payout a second time. Spending coins on upgrades persists between sessions.
 
 ## With more time

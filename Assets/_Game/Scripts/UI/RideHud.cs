@@ -213,7 +213,7 @@ public class RideHud : MonoBehaviour
             progressFill.sizeDelta = new Vector2(BarWidth, fillHeight);
         }
 
-        bool showBest = sled.PreviousBestMeters > 1f;
+        bool showBest = economy.BestDistanceMeters > 1f;
         if (bestRoot.gameObject.activeSelf != showBest)
         {
             bestRoot.gameObject.SetActive(showBest);
@@ -221,7 +221,7 @@ public class RideHud : MonoBehaviour
 
         if (showBest)
         {
-            float along = Mathf.Clamp01(sled.PreviousBestMeters / finishMeters);
+            float along = Mathf.Clamp01(economy.BestDistanceMeters / finishMeters);
             bestRoot.anchoredPosition = new Vector2(16f, BarHeight * along);
         }
     }
