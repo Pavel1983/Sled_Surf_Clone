@@ -1,6 +1,4 @@
 using UnityEngine;
-using UnityEngine.Animations;
-using UnityEngine.Playables;
 
 /// <summary>
 /// Puts Ladybug on the sled and plays her poses.
@@ -8,36 +6,29 @@ using UnityEngine.Playables;
 /// slides, and falls on a crash.
 /// While she is seated her hips are pinned to the visual origin.
 /// <see cref="SlideFacing"/> puts that origin on the snow and tilts it with the slope.
+/// The poses and the blends between them are in the animator controller. This class only sets its
+/// two parameters and reads back how far the sit-down has got.
 /// </summary>
 [DisallowMultipleComponent]
 public class SledRider : MonoBehaviour
 {
-    // Mixer inputs.
-    private const int SlideInput = 0;
-    private const int CrashInput = 1;
-    private const int IdleInput = 2;
-    private const int SitInput = 3;
+    private static readonly int SeatedParameter = Animator.StringToHash("Seated");
+    private static readonly int CrashedParameter = Animator.StringToHash("Crashed");
+    private static readonly int IdleState = Animator.StringToHash("Idle");
+    private static readonly int SitState = Animator.StringToHash("Sit");
 
     [Tooltip("Child of the sled the model is parented to. SlideFacing moves and tilts it.")]
     [SerializeField] private Transform visual;
     [Tooltip("The Ladybug model. A copy is placed under Visual when the scene starts.")]
     [SerializeField] private GameObject modelPrefab;
-    [SerializeField] private AnimationClip slideClip;
-    [Tooltip("Standing pose for the start screen.")]
-    [SerializeField] private AnimationClip idleClip;
-    [Tooltip("The drop from standing into the slide pose.")]
-    [SerializeField] private AnimationClip sitClip;
-    [SerializeField] private AnimationClip crashClip;
+    [Tooltip("States Idle, Sit, Slide and Crash, switched by the Seated and Crashed parameters.")]
+    [SerializeField] private RuntimeAnimatorController controller;
     [Tooltip("The camera she turns to while she stands on the start screen.")]
     [SerializeField] private Transform viewCamera;
     [Tooltip("Height of the model in meters. Twice a real person so she reads next to the sled sphere.")]
     [SerializeField] private float targetHeight = 3.24f;
     [Tooltip("Extra yaw if the imported model does not face the sled's forward axis.")]
     [SerializeField] private float yawOffset = 0f;
-    [Tooltip("Seconds the slide pose takes to melt into the crash fall.")]
-    [SerializeField] private float crashBlendTime = 0.15f;
-    [Tooltip("Seconds the standing pose takes to melt into the sit-down, and the sit-down into the slide.")]
-    [SerializeField] private float sitBlendTime = 0.15f;
     [Tooltip("Part of the sit-down she spends turning from the camera to the road. 1 turns for the whole sit-down.")]
     [Range(0.1f, 1f)]
     [SerializeField] private float turnShare = 0.7f;
@@ -45,27 +36,17 @@ public class SledRider : MonoBehaviour
     private Transform rider;
     private Transform hips;
     private SkinnedMeshRenderer skin;
-    private PlayableGraph graph;
-    private bool graphAlive;
-    private AnimationMixerPlayable mixer;
-    private AnimationClipPlayable crashPlayable;
-    private AnimationClipPlayable idlePlayable;
-    private AnimationClipPlayable sitPlayable;
-    private bool hasIdleClip;
-    private bool hasSitClip;
-    private float idleLength;
-    private float sitLength;
+    private Animator animator;
 
-    // 0 is standing at the start, 1 is seated on the sled.
-    private float seat = 1f;
-    private bool sittingDown;
+    // True from TAP TO PLAY until the run returns to the start.
+    private bool seated;
+
+    // 0 is standing at the start, 1 is seated on the sled. Read from the sit-down state every frame.
+    private float seat;
 
     // Yaw that faces the camera, kept from the last frame she was fully standing.
     private float standYaw;
-    private Sled sled;
-    private bool hasCrashClip;
     private bool crashed;
-    private float crashWeight;
     private int posedFrames;
     private bool heightFitted;
 
@@ -84,9 +65,11 @@ public class SledRider : MonoBehaviour
 
         skin = rider.GetComponentInChildren<SkinnedMeshRenderer>();
         heightFitted = FitHeight();
-        PlaySlide();
 
-        sled = GetComponent<Sled>();
+        animator = rider.GetComponentInChildren<Animator>();
+        animator.applyRootMotion = false;
+        animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        animator.runtimeAnimatorController = controller;
     }
 
     private void LateUpdate()
@@ -112,97 +95,74 @@ public class SledRider : MonoBehaviour
             return;
         }
 
-        UpdateSeat();
-        BlendCrash();
-        ApplyWeights();
-        // Before the pin: turning her moves the pelvis the pin reads.
-        FaceCamera();
         // The fall starts on her feet and ends on the snow. Pinning the pelvis would hold her
         // hips in place and swing the rest of the body around them.
-        if (!crashed)
+        if (crashed)
         {
-            PinHips();
+            return;
         }
+
+        seat = ReadSeat();
+        // Before the pin: turning her moves the pelvis the pin reads.
+        FaceCamera();
+        PinHips();
     }
 
-    private void OnDestroy()
+    /// <summary>Starts the turn to the road and the sit-down.</summary>
+    public void SitDown()
     {
-        if (graphAlive && graph.IsValid())
-        {
-            graph.Destroy();
-        }
+        seated = true;
+        animator.SetBool(SeatedParameter, true);
     }
 
     /// <summary>Starts the fall. The pose blends in from whatever she was doing.</summary>
     public void PlayCrash()
     {
-        if (!hasCrashClip || !graphAlive)
-        {
-            return;
-        }
-
         crashed = true;
-        crashPlayable.SetTime(0);
-        crashPlayable.SetDone(false);
-        crashPlayable.Play();
+        animator.SetBool(CrashedParameter, true);
     }
 
-    /// <summary>Drops the fall, so the next run starts from the standing pose.</summary>
-    public void StopCrash()
+    /// <summary>
+    /// Puts her back on her feet for the next run. The run has jumped back to the start and the camera
+    /// cut with it, so the controller switches to the standing pose without a blend.
+    /// </summary>
+    public void StandUp()
     {
-        if (!crashed)
-        {
-            return;
-        }
-
+        seated = false;
         crashed = false;
-        crashWeight = 0f;
-        crashPlayable.Pause();
+        seat = 0f;
+        animator.SetBool(SeatedParameter, false);
+        animator.SetBool(CrashedParameter, false);
     }
 
-    private void UpdateSeat()
+    // The animator has already been evaluated this frame, so the turn and the hip pin
+    // follow the same moment of the sit-down that is on screen.
+    private float ReadSeat()
     {
-        if (!hasIdleClip || sled == null)
+        if (!seated)
         {
-            return;
+            return 0f;
         }
 
-        bool wantSeated = sled.PlayArmed || sled.IsRiding || sled.IsStopped;
-        if (wantSeated && seat < 1f)
+        AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
+        if (state.shortNameHash == IdleState)
         {
-            float duration = hasSitClip ? sitLength : sitBlendTime;
-            seat = duration > 0.001f ? Mathf.MoveTowards(seat, 1f, Time.deltaTime / duration) : 1f;
-            sittingDown = true;
-        }
-        else if (!wantSeated && seat > 0f)
-        {
-            // The run has jumped back to the start and the camera cut with it, so she is simply
-            // standing again. A blend from the seated pose would drag her feet through the snow.
-            seat = 0f;
-            sittingDown = false;
+            // Still standing: the sit-down is blending in, or has not started yet.
+            return animator.IsInTransition(0)
+                ? Mathf.Clamp01(animator.GetNextAnimatorStateInfo(0).normalizedTime)
+                : 0f;
         }
 
-        // The pack imports the idle without looping, so a playable would freeze on its last frame.
-        double idleTime = idlePlayable.GetTime();
-        if (idleTime >= idleLength)
+        if (state.shortNameHash == SitState)
         {
-            idlePlayable.SetTime(idleTime - idleLength);
+            return Mathf.Clamp01(state.normalizedTime);
         }
 
-        // The sit-down is scrubbed by hand so the pose and the hip pin move together.
-        if (hasSitClip)
-        {
-            sitPlayable.SetTime(seat * sitLength);
-        }
+        return 1f;
     }
 
     private void FaceCamera()
     {
-        if (!hasIdleClip || crashed)
-        {
-            return;
-        }
-
         // The yaw is frozen once she starts to sit. A camera straight behind her is half a turn
         // away either way, and a live value would let the turn flip sides from frame to frame.
         if (seat <= 0f)
@@ -218,46 +178,6 @@ public class SledRider : MonoBehaviour
         float turn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(seat / turnShare));
         float yaw = standYaw + Mathf.DeltaAngle(standYaw, yawOffset) * turn;
         rider.localRotation = Quaternion.Euler(0f, yaw, 0f);
-    }
-
-    private void ApplyWeights()
-    {
-        if (!graphAlive)
-        {
-            return;
-        }
-
-        float idle = 1f - seat;
-        float sit = 0f;
-        float slide = seat;
-        if (sittingDown && hasSitClip)
-        {
-            float elapsed = seat * sitLength;
-            float blend = Mathf.Max(0.01f, Mathf.Min(sitBlendTime, sitLength * 0.5f));
-            float into = Mathf.Clamp01(elapsed / blend);
-            float outOf = Mathf.Clamp01((elapsed - (sitLength - blend)) / blend);
-            idle = 1f - into;
-            sit = into * (1f - outOf);
-            slide = into * outOf;
-        }
-
-        float rest = 1f - crashWeight;
-        mixer.SetInputWeight(SlideInput, slide * rest);
-        mixer.SetInputWeight(CrashInput, crashWeight);
-        mixer.SetInputWeight(IdleInput, idle * rest);
-        mixer.SetInputWeight(SitInput, sit * rest);
-    }
-
-    private void BlendCrash()
-    {
-        if (!crashed || crashWeight >= 1f)
-        {
-            return;
-        }
-
-        crashWeight = crashBlendTime > 0.001f
-            ? Mathf.MoveTowards(crashWeight, 1f, Time.deltaTime / crashBlendTime)
-            : 1f;
     }
 
     private void PinHips()
@@ -339,67 +259,5 @@ public class SledRider : MonoBehaviour
 
         rider.localScale = Vector3.one * (targetHeight / worldHeight);
         return true;
-    }
-
-    private void PlaySlide()
-    {
-        AnimationClip clip = slideClip;
-        Animator animator = rider.GetComponentInChildren<Animator>();
-        if (clip == null || animator == null || animator.avatar == null)
-        {
-            return;
-        }
-
-        animator.applyRootMotion = false;
-        animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-        animator.runtimeAnimatorController = null;
-
-        graph = PlayableGraph.Create("SledSlide");
-        graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
-        AnimationClipPlayable playable = AnimationClipPlayable.Create(graph, clip);
-        playable.SetApplyFootIK(false);
-        mixer = AnimationMixerPlayable.Create(graph, 4);
-        graph.Connect(playable, 0, mixer, SlideInput);
-        mixer.SetInputWeight(SlideInput, 1f);
-
-        if (idleClip != null)
-        {
-            idlePlayable = AnimationClipPlayable.Create(graph, idleClip);
-            idlePlayable.SetApplyFootIK(false);
-            graph.Connect(idlePlayable, 0, mixer, IdleInput);
-            idleLength = Mathf.Max(0.01f, idleClip.length);
-            hasIdleClip = true;
-            // She starts on her feet.
-            seat = 0f;
-            mixer.SetInputWeight(SlideInput, 0f);
-            mixer.SetInputWeight(IdleInput, 1f);
-        }
-
-        if (hasIdleClip && sitClip != null)
-        {
-            sitPlayable = AnimationClipPlayable.Create(graph, sitClip);
-            sitPlayable.SetApplyFootIK(false);
-            sitPlayable.Pause();
-            graph.Connect(sitPlayable, 0, mixer, SitInput);
-            sitLength = Mathf.Max(0.01f, sitClip.length);
-            hasSitClip = true;
-        }
-
-        if (crashClip != null)
-        {
-            crashPlayable = AnimationClipPlayable.Create(graph, crashClip);
-            crashPlayable.SetApplyFootIK(false);
-            // With a duration the clip stops on its last frame and she stays down.
-            crashPlayable.SetDuration(crashClip.length);
-            crashPlayable.Pause();
-            graph.Connect(crashPlayable, 0, mixer, CrashInput);
-            mixer.SetInputWeight(CrashInput, 0f);
-            hasCrashClip = true;
-        }
-
-        AnimationPlayableOutput output = AnimationPlayableOutput.Create(graph, "Slide", animator);
-        output.SetSourcePlayable(mixer);
-        graph.Play();
-        graphAlive = true;
     }
 }

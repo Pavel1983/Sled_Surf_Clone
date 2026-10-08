@@ -151,11 +151,11 @@ The HUD hierarchy, the stick, the particles and the lines live in the scene and 
 | Event | Raised by | Listener |
 |-------|-----------|----------|
 | `SlingshotPull.Released` | the band is let go | `Sled` launches itself |
-| `Sled.Armed` | TAP TO PLAY is pressed | `RunAudio.PlaySitDown` |
+| `Sled.Armed` | TAP TO PLAY is pressed | `SledRider.SitDown`, `RunAudio.PlaySitDown` |
 | `Sled.Slowed` | a slowing obstacle | `RunAudio.PlaySlowHit` |
 | `Sled.Crashed` | an obstacle that ends the run | `SledRider.PlayCrash`, `RunAudio.PlayCrash` |
 | `Sled.RunFinished` | the run ends for any reason | `GameBootstrap` → `RunEconomy.CommitRun` |
-| `Sled.RunReset` | the run returns to the start | `SledRider.StopCrash`, every `Obstacle.Restore`, `GameBootstrap` places the gates |
+| `Sled.RunReset` | the run returns to the start | `SledRider.StandUp`, every `Obstacle.Restore`, `GameBootstrap` places the gates |
 | `PathCoins.Picked` | a coin is picked up | `RunAudio.PlayCoin` |
 | `RideHud.Clicked` | any HUD button | `RunAudio.PlayClick` |
 | `RunEconomy.Changed` | coins or levels changed | `GameBootstrap` → `ProgressRepository.Save` |
@@ -164,9 +164,10 @@ The HUD hierarchy, the stick, the particles and the lines live in the scene and 
 flowchart LR
     Pull["SlingshotPull"] -- Released --> Sled
     Sled -- Armed --> Audio["RunAudio"]
+    Sled -- Armed --> Rider["SledRider"]
     Sled -- Slowed --> Audio
     Sled -- Crashed --> Audio
-    Sled -- Crashed --> Rider["SledRider"]
+    Sled -- Crashed --> Rider
     Sled -- RunReset --> Rider
     Sled -- RunReset --> Obstacles["every Obstacle"]
     Sled -- RunFinished --> Economy["RunEconomy"]
@@ -298,16 +299,30 @@ flowchart LR
 
 `SlideFacing` moves the `Visual` object: it plants it on the road surface under the sled and tilts it with the slope. In the air the model eases back upright and flies with the body. The position comes from the interpolated transform, otherwise the model stutters against the camera.
 
-`SledRider` places a copy of the model under `Visual` and drives its poses through a `PlayableGraph` with a four-input mixer:
+`SledRider` places a copy of the model under `Visual` and gives its `Animator` the `Ladybug` controller (`Art/Ladybug/Ladybug.controller`). The poses and the blends between them are in the controller:
 
-| Input | Clip | When |
+| State | Clip | When |
 |-------|------|------|
-| Idle | `Ilde_Breathing` | The start screen. Looped by hand. |
-| Sit | `Run_to_Slide` | After TAP TO PLAY. Scrubbed by hand, so the pose and the hip pin move together. |
+| Idle | `Ilde_Breathing` | The start screen. The default state. |
+| Sit | `Run_to_Slide` | After TAP TO PLAY. |
 | Slide | `Slide` | The ride. |
 | Crash | `Death2` | After a crash. Stops on its last frame. |
 
-One number, `seat`, from 0 (standing) to 1 (seated), drives three things at once: the clip weights, the turn from the camera to the road, and the pin of the hips to the point on the snow. While she is seated the hips are pulled back to the origin of `Visual` every frame, otherwise the slide clip rocks her against the sled.
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Sit: Seated
+    Sit --> Slide: the clip ends
+    Slide --> Crash: Crashed
+    Crash --> Idle: not Seated, not Crashed
+    Slide --> Idle: not Seated
+```
+
+The two transitions out of Any State are drawn from `Slide` here: the fall can start from any state, and so can the return to `Idle`. The blends take 0.15 s, and the return to `Idle` takes none, because the camera cuts back to the start with it.
+
+`SledRider` sets the two parameters from three methods that `GameBootstrap` subscribes to the sled: `SitDown` on `Armed`, `PlayCrash` on `Crashed`, `StandUp` on `RunReset`.
+
+One number, `seat`, from 0 (standing) to 1 (seated), is read back from the animator every frame: it is the progress of the `Sit` state. It drives the turn from the camera to the road and the pin of the hips to the point on the snow, so both follow the pose that is on screen. While she is seated the hips are pulled back to the origin of `Visual` every frame, otherwise the slide clip rocks her against the sled.
 
 ---
 
@@ -384,7 +399,7 @@ The README describes how to use each of them.
 
 | Folder | Contents |
 |--------|----------|
-| `Art/Ladybug` | The rider's model, clips and texture. |
+| `Art/Ladybug` | The rider's model, clips, animator controller and texture. |
 | `Art/Obstacles`, `Art/Road` | The obstacle meshes and their texture, the road texture. |
 | `Art/Decor` | The street props and their textures. |
 | `Art/UI`, `Art/Fx` | The HUD, stick and upgrade sprites; the snowflake, lightning and gate wall textures. |

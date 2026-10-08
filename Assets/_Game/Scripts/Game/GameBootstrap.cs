@@ -37,8 +37,9 @@ public class GameBootstrap : MonoBehaviour
         hud.Initialize(economy);
 
         sled.RunFinished += BankRun;
+        sled.Armed += rider.SitDown;
         sled.Crashed += rider.PlayCrash;
-        sled.RunReset += rider.StopCrash;
+        sled.RunReset += rider.StandUp;
 
         sled.Armed += runAudio.PlaySitDown;
         sled.Slowed += runAudio.PlaySlowHit;

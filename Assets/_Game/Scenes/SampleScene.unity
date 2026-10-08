@@ -7717,15 +7717,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SledRider
   visual: {fileID: 813100012}
   modelPrefab: {fileID: 100132, guid: 6df5a5b231b596f4dbcb5d4a875446ba, type: 3}
-  slideClip: {fileID: 7400000, guid: bed4a17a94aa0ee409136acdf5df48cf, type: 3}
-  idleClip: {fileID: 7400000, guid: 8b600d585175a07cdea30b0260c2b445, type: 3}
-  sitClip: {fileID: 7400000, guid: 1683f135106d7270d66d7325fd8866c3, type: 3}
-  crashClip: {fileID: 7400000, guid: 5b73bd05c03803f53d53e8e22ce34cec, type: 3}
+  controller: {fileID: 9100000, guid: 4e2cbe9a359674160ae01422a5bdcaf3, type: 2}
   viewCamera: {fileID: 330585546}
   targetHeight: 3.24
   yawOffset: 0
-  crashBlendTime: 0.15
-  sitBlendTime: 0.15
   turnShare: 0.7
 --- !u!114 &813100008
 MonoBehaviour:
